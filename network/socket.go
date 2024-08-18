@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"go-chat/types"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -52,8 +53,14 @@ func (c *Client) Read() {
 		var msg *message
 		err := c.Socket.ReadJSON(&msg)
 		if err != nil {
-			panic(err)
+			if !websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
+				break
+			} else {
+				panic(err)
+			}
 		} else {
+			log.Printf("Read: %+v", msg, "Client: ", c.Name)
+			log.Println()
 			msg.Time = time.Now().Unix()
 			msg.Name = c.Name
 
@@ -66,6 +73,8 @@ func (c *Client) Write() {
 	// 클라이언트가 메시지를 전송하는 함수
 	defer c.Socket.Close()
 	for msg := range c.Send {
+		log.Printf("Write: %+v", msg, "Client: ", c.Name)
+		log.Println()
 		err := c.Socket.WriteJSON(msg)
 		if err != nil {
 			panic(err)
