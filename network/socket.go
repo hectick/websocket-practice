@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/websocket"
 	"go-chat/types"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -101,11 +102,17 @@ func (r *Room) SocketServe(c *gin.Context) {
 		panic(err)
 	}
 
+	// URL 디코딩하여 한글 닉네임을 처리
+	userName, err := url.QueryUnescape(userCookie.Value)
+	if err != nil {
+		panic(err)
+	}
+
 	client := &Client{
 		Socket: socket,
 		Send:   make(chan *message, types.MessageBufferSize),
 		Room:   r,
-		Name:   userCookie.Value,
+		Name:   userName,
 	}
 
 	r.Join <- client
