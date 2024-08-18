@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/websocket"
 	"go-chat/types"
 	"net/http"
+	"time"
 )
 
 // http 커넥션을 webSocket 커넥션으로 업그레이드!
@@ -43,6 +44,52 @@ func NewRoom() *Room {
 	}
 }
 
+func (c *Client) Read() {
+	// 클라이언트가 들어오는 메시지를 읽는 함수
+	defer c.Socket.Close()
+	for {
+		var msg *message
+		err := c.Socket.ReadJSON(&msg)
+		if err != nil {
+			panic(err)
+		} else {
+			msg.Time = time.Now().Unix()
+			msg.Name = c.Name
+
+			c.Room.Forward <- msg
+		}
+	}
+}
+
+func (c *Client) Write() {
+	// 클라이언트가 메시지를 전송하는 함수
+	defer c.Socket.Close()
+	for msg := range c.Send {
+		err := c.Socket.WriteJSON(msg)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func (r *Room) RunInit() {
+	//Room에 있는 모든 채널값들을 받는 역할
+	for {
+		select {
+		case client := <-r.Join:
+			r.Clients[client] = true
+		case client := <-r.Leave:
+			r.Clients[client] = false
+			close(client.Send)
+			delete(r.Clients, client)
+		case msg := <-r.Forward:
+			for client := range r.Clients {
+				client.Send <- msg
+			}
+		}
+	}
+}
+
 func (r *Room) SocketServe(c *gin.Context) {
 	socket, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -63,4 +110,7 @@ func (r *Room) SocketServe(c *gin.Context) {
 
 	r.Join <- client
 	defer func() { r.Leave <- client }() // 커넥션이 끊김으로써 함수를 벗어나는 상황이 발생했을때 leave
+
+	go client.Write()
+	client.Read()
 }
